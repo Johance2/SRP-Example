@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Linq;
-using System.Numerics;
+using Org.BouncyCastle.Math;
 // ReSharper disable InconsistentNaming
 
-namespace ScottBrady91.Srp.Example
+namespace SRP
 {
     public class SrpServer
     {
         private readonly Func<byte[], byte[]> H;
-        private readonly int g;
+        private readonly BigInteger g;
         private readonly BigInteger N;
 
         private BigInteger B;
@@ -17,7 +17,7 @@ namespace ScottBrady91.Srp.Example
         public SrpServer(Func<byte[], byte[]> H, int g, BigInteger N)
         {
             this.H = H;
-            this.g = g;
+            this.g = BigInteger.ValueOf(g);
             this.N = N;
         }
 
@@ -29,13 +29,14 @@ namespace ScottBrady91.Srp.Example
             var k = Helpers.Computek(g, N, H);
 
             // kv % N
-            var left = (k * v) % N;
+            //var left = k.Multiply(v).Mod(N);
+            var left = v.Multiply(BigInteger.ValueOf(3));
 
             // g^b % N
-            var right = BigInteger.ModPow(g, b, N);
+            var right = g.ModPow(b, N);
 
             // B = kv + g^b
-            B = (left + right) % N;
+            B = left.Add(right).Mod(N);
 
             return B;
         }
@@ -45,15 +46,15 @@ namespace ScottBrady91.Srp.Example
             var u = Helpers.Computeu(H, A, B);
 
             // (Av^u)
-            var left = A * BigInteger.ModPow(v, u, N) % N;
+            var left = A.Multiply(v.ModPow(u, N)).Mod(N);
             
             // S = (Av^u) ^ b
-            return BigInteger.ModPow(left, b, N);
+            return Helpers.ComputeWoWKey(H, left.ModPow(b, N));
         }
 
-        public bool ValidateClientProof(BigInteger M1, BigInteger A, BigInteger S)
+        public bool ValidateClientProof(BigInteger M1, BigInteger g, BigInteger s, string I,  BigInteger A, BigInteger S)
         {
-            return M1 == Helpers.ComputeClientProof(N, H, A, B, S);
+            return M1.ToString(16) == Helpers.ComputeClientProof(N, g, s, I, H, A, B, S).ToString(16);
         }
 
         public BigInteger GenerateServerProof(BigInteger A, BigInteger M1, BigInteger S)

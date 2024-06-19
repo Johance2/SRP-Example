@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Linq;
-using System.Numerics;
+using Org.BouncyCastle.Math;
 using System.Text;
 
 // ReSharper disable InconsistentNaming
-namespace ScottBrady91.Srp.Example
+namespace SRP
 {
     public class SrpClient
     {
         private readonly Func<byte[], byte[]> H;
-        private readonly int g;
+        private readonly BigInteger g;
         private readonly BigInteger N;
 
         private BigInteger A;
@@ -18,7 +18,13 @@ namespace ScottBrady91.Srp.Example
         public SrpClient(Func<byte[], byte[]> H, int g, BigInteger N)
         {
             this.H = H;
-            this.g = g;
+            this.g = BigInteger.ValueOf(g);
+            this.N = N;
+        }
+        public SrpClient(int g, BigInteger N)
+        {
+            this.H = TestVectors.H;
+            this.g = BigInteger.ValueOf(g);
             this.N = N;
         }
 
@@ -28,7 +34,7 @@ namespace ScottBrady91.Srp.Example
             var x = GeneratePrivateKey(I, P, s);
 
             // v = g^x
-            var v = BigInteger.ModPow(g, x, N);
+            var v = g.ModPow(x, N);
 
             return v;
         }
@@ -39,7 +45,7 @@ namespace ScottBrady91.Srp.Example
             a = TestVectors.a;
 
             // A = g^a
-            A = BigInteger.ModPow(g, a, N);
+            A = g.ModPow(a, N);
 
             return A;
         }
@@ -48,26 +54,27 @@ namespace ScottBrady91.Srp.Example
         {
             var u = Helpers.Computeu(H, A, B);
             var x = GeneratePrivateKey(I, P, s);
-            var k = Helpers.Computek(g, N, H);
+            //var k = Helpers.Computek(g, N, H);
+            var k = BigInteger.ValueOf(3);
 
             // (a + ux)
-            var exp = a + u * x;
+            var exp = a.Add(u.Multiply(x));
 
             // (B - kg ^ x)
-            var val = mod(B - (BigInteger.ModPow(g, x, N) * k % N), N);
+            var val = mod(B.Subtract((g.ModPow(x, N).Multiply(k).Mod(N))), N);
 
             // S = (B - kg ^ x) ^ (a + ux)
-            return BigInteger.ModPow(val, exp, N);
+            return Helpers.ComputeWoWKey(H, val.ModPow(exp, N));
         }
 
-        public BigInteger GenerateClientProof(BigInteger B, BigInteger S)
+        public BigInteger GenerateClientProof(string I, BigInteger s, BigInteger B, BigInteger S)
         {
-            return Helpers.ComputeClientProof(N, H, A, B, S);
+            return Helpers.ComputeClientProof(N, g, s, I, H, A, B, S);
         }
 
         public bool ValidateServerProof(BigInteger M2, BigInteger M1, BigInteger S)
         {
-            return M2 == Helpers.ComputeServerProof(N, H, A, M1, S);
+            return M2.ToString(16) == Helpers.ComputeServerProof(N, H, A, M1, S).ToString(16);
         }
 
         private BigInteger GeneratePrivateKey(string I, string P, byte[] s)
@@ -80,7 +87,7 @@ namespace ScottBrady91.Srp.Example
 
         private static BigInteger mod(BigInteger x, BigInteger m)
         {
-            return (x % m + m) % m;
+            return x.Mod(m).Add(m).Mod(m);
         }
     }
 }
